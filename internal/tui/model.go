@@ -277,18 +277,31 @@ func humanizeDuration(d time.Duration) string {
 	}
 	// Round to the nearest second for display
 	d = d.Truncate(time.Second)
+
+	days := d / (24 * time.Hour)
+	d -= days * 24 * time.Hour
+
 	h := d / time.Hour
 	d -= h * time.Hour
+
 	m := d / time.Minute
 	d -= m * time.Minute
+
 	s := d / time.Second
-	if h > 0 {
-		return fmt.Sprintf("%dh%dm%ds", h, m, s)
+
+	parts := make([]string, 0, 4)
+	if days > 0 {
+		parts = append(parts, fmt.Sprintf("%dd", days))
 	}
-	if m > 0 {
-		return fmt.Sprintf("%dm%ds", m, s)
+	if h > 0 || days > 0 {
+		parts = append(parts, fmt.Sprintf("%dh", h))
 	}
-	return fmt.Sprintf("%ds", s)
+	if m > 0 || h > 0 || days > 0 {
+		parts = append(parts, fmt.Sprintf("%dm", m))
+	}
+	parts = append(parts, fmt.Sprintf("%ds", s))
+
+	return strings.Join(parts, " ")
 }
 
 // progressBar renders a simple ASCII progress bar of given width for percent in [0,1].
