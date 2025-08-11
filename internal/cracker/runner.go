@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"zipcrack/internal/verifier"
 )
 
 type Stats struct {
@@ -28,6 +30,9 @@ type Config struct {
 	BatchSize     int
 	ReportEvery   time.Duration
 	FoundCallback func(pw string)
+
+	// Backend selects the verification backend: "cpu" (default) or "vulkan" (experimental).
+	Backend string
 }
 
 // Runner coordinates generation, workers, stats, and result publishing.
@@ -83,10 +88,19 @@ func (r *Runner) Start(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	r.cancel = cancel
 
-	// Prepare ZIP checker (shared immutable config)
-	checker, err := NewZipChecker(r.cfg.ZipBytes)
-	if err != nil {
-		return err
+	// ZIP will be validated lazily by the selected verifier backend when creating workers.
+
+	// Select verifier backend
+	var v verifier.Verifier
+	switch r.cfg.Backend {
+	case "vulkan":
+		ver, verr := verifier.NewVulkan()
+		if verr != nil {
+			return verr
+		}
+		v = ver
+	default:
+		v = verifier.NewCPU()
 	}
 
 	// Jobs channel carries batches of password candidates
@@ -99,11 +113,12 @@ func (r *Runner) Start(parent context.Context) error {
 		go func(id int) {
 			defer wg.Done()
 
-			// Each worker creates its own view to avoid concurrent mutation on *zip.File.
-			wc, werr := checker.NewWorker()
+			// Each worker creates its own verifier worker instance.
+			vw, werr := v.NewWorker(r.cfg.ZipBytes)
 			if werr != nil {
 				return
 			}
+			defer vw.Close()
 
 			for {
 				select {
@@ -113,24 +128,23 @@ func (r *Runner) Start(parent context.Context) error {
 					if !ok {
 						return
 					}
-					// Process batch
-					for _, pw := range b {
-						if ctx.Err() != nil {
-							return
+					// Process batch via backend
+					if ctx.Err() != nil {
+						return
+					}
+					matchIdx, attempts := vw.BatchVerify(b)
+					atomic.AddUint64(&r.counters[id], uint64(attempts))
+					if matchIdx >= 0 && matchIdx < len(b) {
+						pw := b[matchIdx]
+						// Found! publish and cancel
+						r.publishResult(Result{Found: true, Password: pw})
+						if r.cfg.FoundCallback != nil {
+							r.cfg.FoundCallback(pw)
 						}
-						ok := wc.Try(pw)
-						atomic.AddUint64(&r.counters[id], 1)
-						if ok {
-							// Found! publish and cancel
-							r.publishResult(Result{Found: true, Password: pw})
-							if r.cfg.FoundCallback != nil {
-								r.cfg.FoundCallback(pw)
-							}
-							if r.cancel != nil {
-								r.cancel()
-							}
-							return
+						if r.cancel != nil {
+							r.cancel()
 						}
+						return
 					}
 				}
 			}

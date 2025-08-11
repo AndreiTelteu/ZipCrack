@@ -114,6 +114,14 @@ func main() {
 	}
 	alphabet := charset.Combine(sets...)
 
+	// Backend selection (cpu|vulkan)
+	backend := promptString(reader, "Verification backend (cpu|vulkan)", "cpu")
+	backend = strings.ToLower(strings.TrimSpace(backend))
+	if backend != "cpu" && backend != "vulkan" {
+		fmt.Println("Unknown backend, falling back to cpu")
+		backend = "cpu"
+	}
+
 	// Load ZIP file into memory
 	zipBytes, err := os.ReadFile(zipPath)
 	if err != nil {
@@ -133,6 +141,7 @@ func main() {
 		BatchSize:     batchSize,
 		ReportEvery:   2 * time.Second,
 		FoundCallback: func(pw string) { cancel() },
+		Backend:       backend,
 	}
 	run, err := cracker.NewRunner(cfg)
 	if err != nil {
