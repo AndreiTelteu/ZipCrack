@@ -83,7 +83,7 @@ func (r *Runner) Start(parent context.Context) error {
 	ctx, cancel := context.WithCancel(parent)
 	r.cancel = cancel
 
-	// Prepare ZIP checker
+	// Prepare ZIP checker (shared immutable config)
 	checker, err := NewZipChecker(r.cfg.ZipBytes)
 	if err != nil {
 		return err
@@ -98,6 +98,13 @@ func (r *Runner) Start(parent context.Context) error {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
+
+			// Each worker creates its own view to avoid concurrent mutation on *zip.File.
+			wc, werr := checker.NewWorker()
+			if werr != nil {
+				return
+			}
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -111,7 +118,7 @@ func (r *Runner) Start(parent context.Context) error {
 						if ctx.Err() != nil {
 							return
 						}
-						ok := checker.Try(pw)
+						ok := wc.Try(pw)
 						atomic.AddUint64(&r.counters[id], 1)
 						if ok {
 							// Found! publish and cancel

@@ -146,6 +146,9 @@ func main() {
 		StatsCh:     run.StatsCh(),
 		ResultCh:    run.ResultCh(),
 		Stop:        cancel,
+		AlphabetLen: len(alphabet),
+		MinLen:      minLen,
+		MaxLen:      maxLen,
 	})
 
 	// Start cracking in background
