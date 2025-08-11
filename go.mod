@@ -4,6 +4,7 @@ go 1.23.4
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.6
+	github.com/vulkan-go/vulkan v0.0.0-20210402152248-956e3850d8f9
 	github.com/yeka/zip v0.0.0-20231116150916-03d6312748a9
 )
 

@@ -2,6 +2,7 @@ package cracker
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -90,17 +91,23 @@ func (r *Runner) Start(parent context.Context) error {
 
 	// ZIP will be validated lazily by the selected verifier backend when creating workers.
 
-	// Select verifier backend
+	// Select verifier backend with automatic fallback
 	var v verifier.Verifier
 	switch r.cfg.Backend {
 	case "vulkan":
 		ver, verr := verifier.NewVulkan()
 		if verr != nil {
-			return verr
+			// Log the Vulkan error and fall back to CPU
+			fmt.Printf("Warning: Vulkan initialization failed (%v)\n", verr)
+			fmt.Println("Falling back to CPU backend...")
+			v = verifier.NewCPU()
+		} else {
+			v = ver
+			fmt.Println("Using Vulkan GPU backend")
 		}
-		v = ver
 	default:
 		v = verifier.NewCPU()
+		fmt.Println("Using CPU backend")
 	}
 
 	// Jobs channel carries batches of password candidates

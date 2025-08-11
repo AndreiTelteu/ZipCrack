@@ -29,11 +29,7 @@ func NewCPU() Verifier {
 	return &cpuVerifier{}
 }
 
-// NewVulkan returns a Vulkan-based verifier backend (not yet implemented in this revision).
-// This stub allows the program to compile; actual GPU implementation will be added later.
-func NewVulkan() (Verifier, error) {
-	return nil, errors.New("vulkan backend not implemented yet")
-}
+// NewVulkan is implemented in vulkan.go
 
 /*
 CPU implementation (portable fallback)
